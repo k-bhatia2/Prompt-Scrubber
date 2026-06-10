@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI Prompt Scrubber - Reversible</title>
+<style>
+body{margin:0;background:#f4f6f9;font-family:Arial,sans-serif;color:#333}
+.container{max-width:1300px;margin:20px auto;padding:20px}
+.card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 3px 12px rgba(0,0,0,.1)}
+h1{margin:0;color:#0f62fe}
+p.small{color:#666}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.section{margin-top:15px}
+label{font-weight:bold;display:block;margin-bottom:6px}
+textarea{width:100%;min-height:180px;resize:vertical;padding:10px;border:1px solid #bbb;border-radius:6px;font-family:Consolas,monospace}
+button{background:#0f62fe;color:#fff;border:0;padding:10px 16px;margin:4px;border-radius:6px;cursor:pointer}
+button.secondary{background:#666}
+button.green{background:#198754}
+button.orange{background:#c97a00}
+.tablewrap{max-height:280px;overflow:auto;border:1px solid #ddd;border-radius:6px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;border-bottom:1px solid #eee;text-align:left;font-size:13px}
+th{background:#fafafa;position:sticky;top:0}
+.footer{font-size:12px;color:#666;margin-top:10px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+<h1>🔒 AI Prompt Scrubber (Reversible)</h1>
+<p class="small">Sensitive values are replaced with unique tokens and can later be restored into the AI response. All processing occurs locally in your browser.</p>
+
+<div class="section">
+<label>Original Prompt</label>
+<textarea id="input"></textarea>
+</div>
+
+<div class="section">
+<div style="margin-bottom:8px;">
+<button onclick="scrub()">🧹 Scrub Prompt</button>
+<button class="secondary" onclick="clearAll()">🗑 Clear</button>
+</div>
+<label>Scrubbed Prompt</label>
+<textarea id="scrubbed" readonly></textarea>
+<div style="margin-top:8px;">
+<button class="green" onclick="copyText('scrubbed')">📋 Copy Scrubbed</button>
+<button class="secondary" onclick="downloadMap()">💾 Export Mapping</button>
+<input type="file" id="mapFile" style="display:none" onchange="importMap(event)">
+<button class="secondary" onclick="document.getElementById('mapFile').click()">📂 Import Mapping</button>
+</div>
+</div>
+
+<div class="section">
+<label>Paste AI Response Here</label>
+<textarea id="airesponse"></textarea>
+<div style="margin-top:8px;">
+<button class="orange" onclick="restore()">♻️ Restore AI Response</button>
+</div>
+</div>
+
+<div class="section">
+<label>Restored AI Response</label>
+<textarea id="restored" readonly></textarea>
+<div style="margin-top:8px;">
+<button class="green" onclick="copyText('restored')">📋 Copy Restored Response</button>
+</div>
+</div>
+
+<div class="grid section">
+<div>
+<h3>Detection Summary</h3>
+<div id="summary">No scan performed.</div>
+</div>
+<div>
+<h3>Token Mapping</h3>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Token</th><th>Original Value</th></tr></thead>
+<tbody id="mappingBody"></tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div class="footer">
+Supported: Emails, IPv4, URLs, JDBC strings, Hostnames, Server names, Database names, OMX-XXXX, DB-XXXX, Windows/Linux paths, JWTs, API keys.
+</div>
+</div>
+</div>
+
+<script>
+let tokenMap={}, reverseMap={}, counters={};
+
+const patterns=[
+{type:"EMAIL",regex:/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g},
+{type:"JDBC",regex:/jdbc:[^\s'"]+/gi},
+{type:"URL",regex:/\bhttps?:\/\/[^\s<>"']+/gi},
+{type:"IP",regex:/\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b/g},
+{type:"OMX_TICKET",regex:/\bOMX-\d+\b/gi},
+{type:"DB_TASK",regex:/\bDB-\d+\b/gi},
+{type:"JWT",regex:/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\b/g},
+{type:"API_KEY",regex:/\b(?:AKIA|AIza|ghp_|glpat-|sk_live_|sk_test_)[A-Za-z0-9_-]{10,}\b/g},
+{type:"WINDOWS_PATH",regex:/[A-Za-z]:\\(?:[^\\\s]+\\)*[^\\\s]*/g},
+{type:"LINUX_PATH",regex:/(?:\/[A-Za-z0-9._-]+)+/g},
+{type:"HOSTNAME",regex:/\b(?:[a-zA-Z0-9-]+\.)+[A-Za-z]{2,}\b/g},
+{type:"DATABASE",regex:/\b(?:MAXDB|OMXDB|PRDDB|UATDB|DEVDB|TESTDB|PRODDB)[A-Z0-9_-]*\b/gi},
+{type:"SERVER",regex:/\b(?:APP|WEB|DB|SRV|WAS|API|MAX|MX)[A-Z0-9_-]{2,}\b/g}
+];
+
+function getToken(type,val){
+ if(reverseMap[val]) return reverseMap[val];
+ counters[type]=(counters[type]||0)+1;
+ const token="__"+type+"_"+String(counters[type]).padStart(3,"0")+"__";
+ reverseMap[val]=token;
+ tokenMap[token]=val;
+ return token;
+}
+
+function scrub(){
+ tokenMap={}; reverseMap={}; counters={};
+ let txt=document.getElementById("input").value;
+ let summary={};
+ patterns.forEach(p=>{
+   txt=txt.replace(p.regex,m=>{
+      summary[p.type]=(summary[p.type]||0)+1;
+      return getToken(p.type,m);
+   });
+ });
+ document.getElementById("scrubbed").value=txt;
+ updateMapping();
+ let s="Detected "+Object.values(summary).reduce((a,b)=>a+b,0)+" item(s).<br>";
+ Object.keys(summary).sort().forEach(k=>s+=k+": "+summary[k]+"<br>");
+ document.getElementById("summary").innerHTML=s;
+}
+
+function restore(){
+ let txt=document.getElementById("airesponse").value;
+ Object.keys(tokenMap).sort((a,b)=>b.length-a.length).forEach(t=>{
+   txt=txt.split(t).join(tokenMap[t]);
+ });
+ document.getElementById("restored").value=txt;
+}
+
+function updateMapping(){
+ const body=document.getElementById("mappingBody");
+ body.innerHTML="";
+ Object.keys(tokenMap).forEach(k=>{
+   const tr=document.createElement("tr");
+   tr.innerHTML="<td>"+escapeHtml(k)+"</td><td>"+escapeHtml(tokenMap[k])+"</td>";
+   body.appendChild(tr);
+ });
+}
+
+function escapeHtml(v){
+ return v.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function copyText(id){
+ const el=document.getElementById(id);
+ navigator.clipboard.writeText(el.value).then(()=>alert("Copied."));
+}
+
+function clearAll(){
+ ["input","scrubbed","airesponse","restored"].forEach(id=>document.getElementById(id).value="");
+ tokenMap={}; reverseMap={}; counters={};
+ document.getElementById("mappingBody").innerHTML="";
+ document.getElementById("summary").innerHTML="No scan performed.";
+}
+
+function downloadMap(){
+ const blob=new Blob([JSON.stringify(tokenMap,null,2)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="token_mapping.json";
+ a.click();
+ URL.revokeObjectURL(a.href);
+}
+
+function importMap(evt){
+ const file=evt.target.files[0];
+ if(!file) return;
+ const reader=new FileReader();
+ reader.onload=e=>{
+   tokenMap=JSON.parse(e.target.result);
+   reverseMap={};
+   Object.keys(tokenMap).forEach(k=>reverseMap[tokenMap[k]]=k);
+   updateMapping();
+   alert("Mapping imported.");
+ };
+ reader.readAsText(file);
+}
+
+document.getElementById("input").value=`User john.doe@company.com cannot connect to WASPROD01.
+Deployment OMX-4821 failed after DB-3156.
+Database MAXDBPROD at jdbc:oracle:thin:@db01.prod.company.com:1521/MAXDBPROD is unavailable.
+Server IP: 10.10.20.30
+Logs: C:\IBM\SMP\logs\system.log`;
+</script>
+</body>
+</html>
