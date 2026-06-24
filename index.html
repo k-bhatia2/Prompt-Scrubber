@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI Prompt Scrubber - Reversible</title>
+<title>Prompt Scrubber for AI - Reversible</title>
 <style>
 body{margin:0;background:#f4f6f9;font-family:Arial,sans-serif;color:#333}
 .container{max-width:1300px;margin:20px auto;padding:20px}
@@ -29,7 +29,7 @@ th{background:#fafafa;position:sticky;top:0}
 <body>
 <div class="container">
 <div class="card">
-<h1>🔒 AI Prompt Scrubber (Reversible)</h1>
+<h1>🔒Prompt Scrubber for AI (Reversible)</h1>
 <p class="small">Sensitive values are replaced with unique tokens and can later be restored into the AI response. All processing occurs locally in your browser.</p>
 
 <div class="section">
@@ -98,16 +98,21 @@ const patterns=[
 {type:"JDBC",regex:/jdbc:[^\s'"]+/gi},
 {type:"URL",regex:/\bhttps?:\/\/[^\s<>"']+/gi},
 {type:"IP",regex:/\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b/g},
-{type:"OMX_TICKET",regex:/\bOMX-\d+\b/gi},
-{type:"DB_TASK",regex:/\bDB-\d+\b/gi},
+{type:"OMX-TICKET",regex:/\bOMX-\d+\b/gi},
+{type:"OMX_TICKET",regex:/\bOMX_\d+\b/gi},
+{type:"DB-TASK",regex:/\bDB-\d+\b/gi},
+{type:"DB_TASK",regex:/\bDB_\d+\b/gi},
 {type:"JWT",regex:/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\b/g},
 {type:"API_KEY",regex:/\b(?:AKIA|AIza|ghp_|glpat-|sk_live_|sk_test_)[A-Za-z0-9_-]{10,}\b/g},
 {type:"WINDOWS_PATH",regex:/[A-Za-z]:\\(?:[^\\\s]+\\)*[^\\\s]*/g},
 {type:"LINUX_PATH",regex:/(?:\/[A-Za-z0-9._-]+)+/g},
 {type:"HOSTNAME",regex:/\b(?:[a-zA-Z0-9-]+\.)+[A-Za-z]{2,}\b/g},
 {type:"DATABASE",regex:/\b(?:MAXDB|OMXDB|PRDDB|UATDB|DEVDB|TESTDB|PRODDB)[A-Z0-9_-]*\b/gi},
-{type:"SERVER",regex:/\b(?:APP|WEB|DB|SRV|WAS|API|MAX|MX)[A-Z0-9_-]{2,}\b/g}
+{type:"SERVER",regex:/\b(?:APP|WEB|DB|SRV|WAS|API|MAX|MX)[A-Z0-9_-]{2,}\b/g},
+{type:"CompanyO",regex:/\bONCOR\b/gi},
+{type:"CompanyI",regex:/\bIBM\b/gi}
 ];
+
 
 function getToken(type,val){
  if(reverseMap[val]) return reverseMap[val];
@@ -200,3 +205,6 @@ Logs: C:\IBM\SMP\logs\system.log`;
 </script>
 </body>
 </html>
+
+
+<!-- Made by: Kshitij Bhatia -->
